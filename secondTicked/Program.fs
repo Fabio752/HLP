@@ -3,7 +3,7 @@
 //print function
 let print x = printfn "%A%s" x Environment.NewLine
 
-let lexNGramF (ngram: (char list * bool) list) (cLst: char list) : (char list * char list) option=
+let lexNGram (ngram: (char list * bool) list) (cLst: char list) : (char list * char list) option=
     // match a non-looping rule
     let takeIfInChars chars (matchedCharList, leftCharList) : (char list * char list) option =
         match leftCharList with
@@ -13,7 +13,7 @@ let lexNGramF (ngram: (char list * bool) list) (cLst: char list) : (char list * 
             then Some (currentChar :: matchedCharList, leftCharList') 
             else None
     
-    // because of looping same rule can be applied to a series of char
+    // match a looping rule
     let rec takeWhileInChars chars (matchedCharList, leftCharList) = 
         match leftCharList with 
         | [] -> (matchedCharList, leftCharList) 
@@ -26,115 +26,19 @@ let lexNGramF (ngram: (char list * bool) list) (cLst: char list) : (char list * 
         match state with
         | None -> None
         | Some state' ->
-            // try to match once
+            // try to match once ...
             match takeIfInChars charsLst state' with 
-            | None -> None // if not, rule failed
+            | None -> None // if does not match, return None
             | _ ->  // else, look if the rule can loop and act accordingly
                 if canRepeat
                 then  Some (takeWhileInChars charsLst state')
                 else takeIfInChars charsLst state' 
 
+    // output result
     let result = (Some ([], cLst), ngram) ||> List.fold tryMatch
     match result with
     | None -> None
     | Some (matchedCharList, leftCharList) -> Some (List.rev matchedCharList, leftCharList)    
-
-
-let lexNGramO (ngram: (char list * bool) list) (cLst: char list) : (char list * char list) option=
-    let rec takeWhileInChars chars (acc,lst) =
-        match lst with
-        | head::tail -> 
-            if List.contains head chars 
-            then (takeWhileInChars chars (acc @ [head], tail)) 
-            else (acc, lst)
-        | _ -> (acc, lst)
-
-    let tryMatch state (charsLst,canRepeat) =
-        match state with
-        | None -> None
-        | Some state' ->
-            match snd state' with
-            | head::tail when List.contains head charsLst -> 
-                if canRepeat = true 
-                then Some (takeWhileInChars charsLst state') 
-                else Some (fst state' @ [head], tail)
-            | _ -> None
-
-    (Some ([], cLst), ngram) ||> List.fold tryMatch    
-
-
-let lexNGramS (ngram: (char list * bool) list) (cLst: char list) : (char list * char list) option=
-    // matches exactly 1 char
-    let takeIfInChars chars (acc,lst) : (char list * char list) option =
-        match lst with
-        | []     -> None
-        | hd::tl -> if List.exists ((=) hd) chars
-                    then Some ( hd::acc , tl )
-                    else None      
-    // matches 0 or more chars
-    let rec takeWhileInChars chars (acc,lst) =
-        match lst with
-        | []     -> (acc,lst)
-        | hd::tl -> if List.exists ((=) hd) chars
-                    then takeWhileInChars chars (hd::acc,tl)
-                    else (acc,lst)
-        
-    let tryMatch state (charsLst,canRepeat) =
-        match state with
-        | None -> None
-        | Some s ->
-            // always matches at least 1 char
-            (takeIfInChars charsLst s, canRepeat)
-            |> function
-            | None,       _ -> None
-            | res,    false -> res
-            | Some s1, true -> Some (takeWhileInChars charsLst s1)
-        
-    List.fold tryMatch (Some([],cLst)) ngram
-    |> function
-    | Some (l,r) -> Some (List.rev l, r)
-    | None -> None 
-
-
-let lexNGramM (ngram: (char list * bool) list) (cLst: char list) : (char list * char list) option =
-  let takeIfInChars chars (tokL, inL) : (char list * char list) option =
-    match inL with
-    | [] -> None // We are trying to match a rule but there are no chars left to
-                 // match.
-    | nextChar :: inL' ->
-      match List.tryFind ((=) nextChar) chars with
-      | None -> None
-      | Some matchedChar -> Some (matchedChar :: tokL, inL')
-
-  let rec takeWhileInChars chars (tokL, inL) step =
-    match takeIfInChars chars (tokL, inL) with
-    | None ->
-      if step = 0
-      then None // The rule matched zero times.
-      else Some (tokL, inL) // The rule matched for a while then stopped. Ok.
-    | Some (tokL', inL') ->
-      takeWhileInChars chars (tokL', inL') (step + 1) // Try to match again. 
-
-  let tryMatch state (charsLst, canRepeat) =
-    match state with
-    | None -> None // We could not match a previous rule. Keep on failing.
-    | Some curState -> // curState is a tuple like (tokL, inL).
-      if canRepeat
-      then takeWhileInChars charsLst curState 0
-      else takeIfInChars charsLst curState
-
-  (Some ([], cLst), ngram)
-  ||> List.fold tryMatch
-  |> function
-     | None -> None
-     | Some (tokL, inL) -> Some (List.rev tokL, inL) // Need to reverse the list
-                                                     // of tokens because they
-                                                     // were appended to the 
-                                                     // head instead of the 
-                                                     // back.
-//change this to run
-let lexNGram = lexNGramF 
-
 
 let decimalLit =
     [
