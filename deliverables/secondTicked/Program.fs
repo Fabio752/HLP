@@ -2,6 +2,9 @@
 
 //print function
 let print x = printfn "%A%s" x Environment.NewLine
+type Rule = (char list -> (char * char list) option) * bool
+// CVC: char list -> char list -> (char * char list) option
+
 
 let lexNGram (ngram: (char list * bool) list) (cLst: char list) : (char list * char list) option=
     // match a non-looping rule
@@ -40,6 +43,10 @@ let lexNGram (ngram: (char list * bool) list) (cLst: char list) : (char list * c
     | None -> None
     | Some (matchedCharList, leftCharList) -> Some (List.rev matchedCharList, leftCharList)    
 
+let dotLit =
+    [
+        ['.';','],false
+    ]
 let decimalLit =
     [
         ['0'..'9'],true
@@ -176,12 +183,37 @@ let expectedemail =
     ]
 
 
+let (<|>) lex1 lex2 =
+    fun clst ->
+        (lex1 clst, lex2 clst) ||> Option.orElse  
+
+
+let (>=>) lex1 lex2  =
+    fun clst ->
+        match lex1 clst with
+        | None -> None
+        | Some (matchedChar, leftCharList) ->
+            match lex2 leftCharList with 
+            | None -> Some (matchedChar, leftCharList)
+            | Some (matchedChar', leftCharList') -> Some (matchedChar' @ matchedChar, leftCharList')  
+
+// CAREFUL, With these, need to reverse the result.
+let lexDecimal = (lexNGram integerLit) >=> (lexNGram dotLit) >=> (lexNGram integerLit)
+
+let combinedLexers =
+    [decimalLit;integerLit;emptyStringLit;stringLit]
+    |> List.map lexNGram
+    |> List.reduce (<|>)
+
 [<EntryPoint>]
     
 let main argv =
+    
+    
+    
     printf "Failures decimal:\n"
     test_decimal
-    |> List.map (lexNGram decimalLit)
+    |> List.map (lexDecimal)
     |> List.zip expected_decimal
     |> List.filter (fun (expected, actual) -> expected <> actual)
     |> print
