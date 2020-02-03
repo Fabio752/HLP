@@ -51,9 +51,9 @@ let tokeniseT3 (str: string) =
 ///////////////////////////
 
 type AstT3 =
+    | EXP of AstT3 * AstT3
     | ROUNDBRA of AstT3
     | SQBRA of AstT3
-    | EXP of AstT3 * AstT3
     | DOTEXP
 
 let parseT3 lst =
@@ -62,29 +62,29 @@ let parseT3 lst =
     // simple one token matching
     let (|ParseToken|_|) oneToken tokenLst =
         match tokenLst with
-        | Ok (currToken::restLst) when currToken = oneToken -> Some (Ok restLst)
+        | Ok (currToken::remainingLst) when currToken = oneToken -> Some (Ok remainingLst)
         | _ -> None
 
     // recursive round bracket matching -> ROUNDBRA ::= "(" EXP ")"
     let rec (|ParseRound|_|) tokenList =
         match tokenList with
-        | ParseToken OpenRoundBracket (ParseExp (Some parsedExp, (ParseToken ClosedRoundBracket rest))) -> Some (Some parsedExp, rest)
+        | ParseToken OpenRoundBracket (ParseExp (Some parsedExp, (ParseToken ClosedRoundBracket remaining))) -> Some (Some parsedExp, remaining)
         | _ -> None
 
     // recursive square bracket matching -> SQBRA ::= "[" EXP "]"
     and (|ParseSquare|_|) tokenList =
         match tokenList with
-        | ParseToken OpenSquareBracket (ParseExp (Some parsedExp, (ParseToken ClosedSquareBracket rest))) -> Some (Some parsedExp, rest)
+        | ParseToken OpenSquareBracket (ParseExp (Some parsedExp, (ParseToken ClosedSquareBracket remaining))) -> Some (Some parsedExp, remaining)
         | _ -> None
         
     // parse an exp, based on the top rule of the grammar : EXP ::= "." | ROUNDBRA | SQBRA | ROUNDBRA SQBRA 
     and (|ParseExp|_|) tokenList =
-        // try to match part of the token, when hit a good rule return the parsed values and a rest.
+        // try to match part of the token, when hit a good rule return the parsed values and a remaining.
         match tokenList with
-        | Ok (Dot::rest) -> Some (Some DOTEXP, Ok rest) // it can only match one dot, repeating dots would break the grammar
-        | ParseRound (Some ast, Ok rest) -> Some (Some (ROUNDBRA ast), Ok rest)
-        | ParseSquare (Some ast, Ok rest) -> Some (Some (SQBRA ast), Ok rest) 
-        | ParseRound (Some outerAst, (ParseSquare (Some innerAst, Ok rest))) -> Some (Some (EXP (outerAst, innerAst)), Ok rest) 
+        | Ok (Dot::remaining) -> Some (Some DOTEXP, Ok remaining) // it can only match one dot, repeating dots would break the grammar
+        | ParseRound (Some ast, Ok remaining) -> Some (Some (ROUNDBRA ast), Ok remaining)
+        | ParseSquare (Some ast, Ok remaining) -> Some (Some (SQBRA ast), Ok remaining) 
+        | ParseRound (Some outerAst, (ParseSquare (Some innerAst, Ok remaining))) -> Some (Some (EXP (outerAst, innerAst)), Ok remaining) 
         | _ -> failwith "error in expression parsing" 
     
     //// Actual parsing function body ////
@@ -94,8 +94,8 @@ let parseT3 lst =
     // 3. Not Matched any token -> return error indicating failure at  
     match Ok lst with
         | ParseExp (ast, Ok []) -> Ok ast
-        | ParseExp (_, Ok rest) -> 
-                    Error <| (List.length lst - List.length rest, sprintf "remaining unmatched: %A" rest)
+        | ParseExp (_, Ok remaining) -> 
+                    Error <| (List.length lst - List.length remaining, sprintf "remaining unmatched: %A" remaining)
         | _ -> Error (0, sprintf "Cannot parse at all %A" lst)
 
 
@@ -139,6 +139,7 @@ let parsetest4 =
                        "testing parsing for: ROUNDBRA SQBRA DOT"
 
 
+// Run this to run all current tests
 let runAllTests =
     let testLst =
         testList "Tests" [
@@ -150,10 +151,3 @@ let runAllTests =
             parsetest4
         ]
     runTests defaultConfig testLst |> ignore
-
-
-[<EntryPoint>]
-let main argv =
-    runAllTests
-    Console.ReadKey() |> ignore
-    0 // return an integer exit code
